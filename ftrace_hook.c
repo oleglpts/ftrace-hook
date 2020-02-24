@@ -6,6 +6,7 @@
 
 #define pr_fmt(fmt) "ftrace_hook: " fmt
 
+#include <linux/thread_info.h>
 #include <linux/ftrace.h>
 #include <linux/kallsyms.h>
 #include <linux/kernel.h>
@@ -241,19 +242,44 @@ static asmlinkage long fh_sys_execve(const char __user *filename,
 		const char __user *const __user *argv,
 		const char __user *const __user *envp)
 {
+    int i;
 	long ret;
 	char *kernel_filename;
+    const char *arg = argv[0], *env = envp[0];
 
 	kernel_filename = duplicate_filename(filename);
 
-	pr_info("execve() before: %s\n", kernel_filename);
+	struct task_struct *c = current;
 
-	kfree(kernel_filename);
-
+    char *pathname=NULL,*p="";
+    struct mm_struct *mm = c->mm;
+    if (mm) {
+        down_read(&mm->mmap_sem);
+        if (mm->exe_file) {
+            pathname = kmalloc(PATH_MAX, GFP_ATOMIC);
+            if (pathname) {
+                p = d_path(&mm->exe_file->f_path, pathname, PATH_MAX);
+                /*Now you have the path name of exe in p*/
+            }
+        }
+        up_read(&mm->mmap_sem);
+    }
+//    pr_info("[process=%s, pid=%i, path=%s] execve(%s)\n", c->comm, c->pid, p, kernel_filename);
+//	i = 0;
+//	while (argv[i]) {
+//        pr_info("execve(): argv[%d]=%s\n", i, argv[i]);
+//        i++;
+//	}
+//	i = 0;
+//    while (envp[i]) {
+//        if(envp[i][0] == '_')pr_info("execve() before: envp[%d]=%s\n", i, envp[i]);
+//        i++;
+//    }
 	ret = real_sys_execve(filename, argv, envp);
-
-	pr_info("execve() after: %ld\n", ret);
-
+    pr_info("[process=%s, pid=%i, path=%s] --> execve(%s) = %ld\n", c->comm, c->pid, p, kernel_filename, ret);
+    kfree(kernel_filename);
+    if(pathname)kfree(pathname);
+//	pr_info("execve() return: %ld\n", ret);
 	return ret;
 }
 
@@ -265,7 +291,7 @@ static asmlinkage long fh_sys_execve(const char __user *filename,
 	}
 
 static struct ftrace_hook demo_hooks[] = {
-	HOOK("sys_clone",  fh_sys_clone,  &real_sys_clone),
+//	HOOK("sys_clone",  fh_sys_clone,  &real_sys_clone),
 	HOOK("sys_execve", fh_sys_execve, &real_sys_execve),
 };
 

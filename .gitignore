@@ -6,3 +6,7 @@
 .tmp_versions/
 Module.symvers
 modules.order
+.idea/
+cmake-build-debug/
+CMakeLists.txt
+.cache.mk
